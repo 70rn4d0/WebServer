@@ -1,0 +1,200 @@
+#include "../includes/Server_block.hpp"
+
+
+//todo add a method for pushing another server_name when parsing the config file
+
+
+// int Server_block::get_port() const {}
+struct sockaddr_in *Server_block::get_ip_addr(){
+	return (&server_ip);
+}
+
+
+//method for getting all server names
+std::vector<std::string> Server_block::get_Snames() const{
+	return(server_names);
+}
+Location Server_block::get_location_block(std::string loc) const {
+////	/upload -> /
+	//while in loc each time you don't find the location you subtract the last part of the location and check again
+	while(loc.size() > 1) {
+		if(location_blocks.find(loc) != location_blocks.end()) {
+			return location_blocks.at(loc);
+		}
+		size_t last_slash = loc.find_last_of('/');
+		if (last_slash == std::string::npos || last_slash == 0) {
+			return location_blocks.at("/"); // Return root location if no more slashes to remove
+		}
+		loc = loc.substr(0, last_slash); // Remove the last part of the location
+		if (loc.empty()) {
+			loc = "/"; // Ensure we don't end up with an empty string		
+		}
+	}
+
+	
+	return location_blocks.find(loc) != location_blocks.end() ? location_blocks.at(loc) : Location();
+}
+std::map<std::string, Location> Server_block::get_locations_blocks() const {
+	return location_blocks;
+}		
+
+void Server_block::set_timeout(int t){
+	timeout = t;
+}
+//default constructor add local host and port 80 as basic server block
+Server_block::Server_block(){
+	server_names.push_back("localhost");
+	server_names.push_back("local");
+	server_ip.sin_family = AF_INET;
+	server_ip.sin_addr.s_addr = INADDR_ANY;
+	server_ip.sin_port = htons(8080);
+	index_flag = false;
+	upload_flag = false;
+	timeout = 60; // Default timeout
+	upload_path = "/tmp"; // Default upload path
+	//set root path to current directory
+	char cwd[1024];
+	if (getcwd(cwd, sizeof(cwd)) != NULL) {
+		root_path = cwd;
+	} else {
+		perror("getcwd() error");
+	}
+
+}
+std::vector<std::string> Server_block::get_error_pages() const{
+	(void)error_pages;
+	return error_pages;
+}
+
+Server_block::Server_block(std::string blank){
+	(void)blank;
+	index_flag = false;
+	upload_flag = false;
+	server_ip.sin_family = AF_INET;
+	server_ip.sin_addr.s_addr = INADDR_ANY;
+	timeout = 60; // Default timeout
+	upload_path = "/tmp"; // Default upload path
+	//set root path to current directory
+	char cwd[1024];
+	if (getcwd(cwd, sizeof(cwd)) != NULL) {
+		root_path = cwd;
+	} else {
+		perror("getcwd() error");
+	}
+}
+
+void  Server_block::set_sname(std::vector <std::string> &vect){
+	for(size_t i = 0; i < vect.size(); i++){
+		server_names.push_back(vect[i]);
+	}
+}
+void  Server_block::set_dir_listen(bool a){
+	(void)a;
+	//TODO add a check for the index flag
+	index_flag = a;
+}
+void  Server_block::set_err_pages(std::vector <std::string> &list){
+	for(size_t i = 0; i < list.size(); i++){
+		error_pages.push_back(list[i]);
+	}
+}
+void Server_block::set_ip_host(std::vector <std::string> &vect){
+	//TODO add a check for the ip address if its valid
+	if(vect.size() == 0 || vect.size() > 2){
+		std::cout << "Invalid ip address, using default ip address" << std::endl;
+		return;
+	}
+	//put the address in the server_ip struct
+	if(vect.size() == 1){
+		//find the port after : and set the port
+		size_t pos = vect[0].find(':');
+		if(pos != std::string::npos){
+			server_ip.sin_port = htons(atoi(vect[0].substr(pos + 1).c_str()));
+			server_ip.sin_addr.s_addr = inet_addr(vect[0].substr(0, pos).c_str());
+		}
+		else{
+			server_ip.sin_port = htons(8080); // Default port if not specified
+			server_ip.sin_addr.s_addr = inet_addr(vect[0].c_str());
+		
+		}
+	}
+}
+std::string Server_block::get_root_path() const{
+	return root_path;
+}
+void Server_block::set_root_path(const std::string &path) {
+	root_path = path;
+}
+//deconstructor for freeing any dynamic allocation
+Server_block::~Server_block(){
+    error_pages.clear();
+    location_blocks.clear();
+    server_names.clear();
+}
+//copy constructors could be useful in the future
+Server_block::Server_block(const Server_block &obj){
+	(void)obj;
+}
+Server_block & Server_block::operator=(const Server_block &obj){
+	(void)obj;
+	return(*this);
+}
+
+void Server_block::set_location(std::string directory, std::vector<ConfigNode> &children){
+	//TODO add a check for the location if its valid
+	std::vector<std::string> list;
+	Location location;
+	for(size_t i = 0; i < children.size(); i++){
+		if(children[i].name == "root"){
+			list = children[i].values;
+			location.path = list[0];
+		}
+		else if(children[i].name == "allowed_methods")
+			location.allowed_methods = children[i].values;
+		else if(children[i].name == "client_max_body_size")
+		location.max_body_size = atoi(children[i].values[0].c_str());
+		else if(children[i].name == "autoindex")
+			location.autoindex = (children[i].values[0] == "on");
+		else if(children[i].name == "post_dir")
+			location.upload_path = children[i].values[0];
+		else if(children[i].name == "cgi_flag")
+			location.cgi_flag = (children[i].values[0] == "on");
+		else if(children[i].name == "index")
+			location.index = children[i].values[0];
+		else if(children[i].name == "return")
+			location.redirect = children[i].values[1];
+	}
+	location_blocks[directory] = location;
+}
+bool isDirectory(const char *path) {
+    struct stat statbuf;
+
+    if (stat(path, &statbuf) != 0) {
+        std::cerr << "Error statting path " << path << ": " << strerror(errno) << std::endl;
+        return false; // Or throw an exception, depending on error handling strategy
+    }
+    return S_ISDIR(statbuf.st_mode);
+}
+void Server_block::set_upload_path(std::vector<std::string> &list) {
+	upload_flag = true;
+	if (list.size() == 1) {
+		if (isDirectory(list[0].c_str())) {
+			//check if the path is relative or absolute
+			if (list[0][0] != '/') {
+				char cwd[1024];
+				if (getcwd(cwd, sizeof(cwd)) != NULL) {
+					upload_path = std::string(cwd) + "/" + list[0];
+			}
+			else
+				upload_path = list[0];
+			} 
+		else {
+			std::cerr << "Provided upload path is not a directory: " << list[0] << std::endl;
+			upload_path = "/tmp"; }
+		}
+	} 
+	else {
+		std::cerr << "Invalid upload path configuration, using default /tmp" << std::endl;
+		upload_path = "/tmp"; // Default upload path if the provided one is invalid
+	}
+}

@@ -1,0 +1,37 @@
+#ifndef HTTPREQUEST_HPP
+#define HTTPREQUEST_HPP
+
+#include <iostream>
+#include <string>
+#include <stdbool.h>
+#include <cstdlib>
+#include <sstream>
+#include <map>
+#include "Server_block.hpp"
+
+class HttpRequest{
+    public :
+        HttpRequest();
+        int redirect_count;
+        std::string start_line;
+        bool bad_req;
+        bool is_keep_alive;
+        std::string method;
+        std::string target;
+        std::string query;
+        bool cgi_flag;
+        std::map<std::string, std::string> query_param;
+        std::map<std::string, std::string> headers;
+        std::string version;
+        std::string body;
+        bool parse(const std::string &raw_request, Server_block &f);
+        std::string url_decode(const std::string &str);
+        void extract_query(const std::string& q);
+        std::string trim(const std::string &str);
+        std::string cookies;
+    private :
+        bool parse_start_line(Server_block &f);
+};
+
+
+#endif 
