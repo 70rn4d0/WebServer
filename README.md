@@ -70,7 +70,7 @@ Make
 Building
 ```Bash
 
-git clone https://github.com/70rn4d0/42-common-core.git
+git clone https://github.com/70rn4d0/WebServer.git
 cd WebServer_http
 make
 ```
